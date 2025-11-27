@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Korea Visual Diary – 나의 한국 추억 지도</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Nanum+Myeongjo:wght@400;700;800&display=swap" rel="stylesheet">
+
+  <!-- Leaflet -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <style>
+    :root {
+      --bg1: #504E76;
+      --bg2: #C4C3E3;
+      --sand: #FDF8E2;
+      --leaf: #A3B565;
+      --sun: #FCDD9D;
+      --accent: #F1642E;
+      --card: #ffffff;
+      --ink: #252336;
+      --muted: #6b6985;
+      --glass: rgba(255,255,255,0.12);
+      --glass-border: rgba(255,255,255,0.35);
+      --shadow-soft: 0 18px 40px rgba(0,0,0,.28);
+      --radius-xl: 26px;
+      --radius-lg: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      font-family: "Gowun Dodum", "Noto Sans KR", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: var(--sand);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      background: radial-gradient(circle at 20% 0%, var(--sun) 0, transparent 50%),
+                  radial-gradient(circle at 80% 0%, #E4E3FF 0, transparent 50%),
+                  linear-gradient(180deg, var(--bg1), var(--bg2));
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 1280px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04));
+      border-radius: var(--radius-xl);
+      border: 1px solid rgba(255,255,255,.25);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(22px) saturate(150%);
+      display: flex;
+      flex-direction: column;
+      padding: 18px 22px;
+    }
+
+    /* HEADER */
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .title-block h1 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      color: #fff;
+      font-family: "Nanum Myeongjo", "Gowun Dodum", "Noto Sans KR", serif;
+      font-weight: 700;
+    }
+
+    .title-block p {
+      margin: 2px 0 0;
+      font-size: 13px;
+      color: var(--sun);
+    }
+
+    .year-filters {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .year-chip {
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.35);
+      background: rgba(0,0,0,.12);
+      color: #fdfdfd;
+      font-size: 13px;
+      padding: 7px 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      backdrop-filter: blur(16px);
+      transition: background .2s ease, transform .15s ease, box-shadow .2s ease, border-color .2s ease;
+      font-family: "Gowun Dodum", sans-serif;
+    }
+
+    .year-chip:hover:not(.disabled):not(.active) {
+      transform: translateY(-1px);
+      background: rgba(0,0,0,.2);
+    }
+
+    .year-chip span.count {
+      font-size: 11px;
+      opacity: .9;
+    }
+
+    .year-chip.active {
+      background: var(--accent);
+      border-color: rgba(255,255,255,.75);
+      box-shadow: 0 0 16px rgba(241,100,46,.45);
+      transform: translateY(-1px);
+    }
+
+    .year-chip.disabled {
+      opacity: .45;
+      cursor: default;
+    }
+
+    /* LAYOUT */
+    .content {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(0, 2.1fr);
+      gap: 16px;
+      margin-top: 6px;
+      min-height: 520px;
+    }
+
+    @media (max-width: 960px) {
+      .content {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* LEFT: MAP + LIST */
+    .left-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .map-shell {
+      position: relative;
+      border-radius: var(--radius-lg);
+      padding: 12px;
+      background: linear-gradient(145deg, rgba(0,0,0,0.35), rgba(0,0,0,0.75));
+      overflow: hidden;
+      min-height: 260px;
+    }
+
+    /* Circular globe map */
+    .map-globe {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1/1;
+      border-radius: 999px;
+      overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0,0,0,.7);
+      border: 2px solid rgba(255,255,255,.15);
+    }
+
+    .map-globe .leaflet-container {
+      width: 100%;
+      height: 100%;
+      background: #1a1a2e;
+    }
+
+    .map-globe .leaflet-tile-pane {
+      filter: brightness(0.85) contrast(1.1) saturate(0.9);
+    }
+
+    .map-caption {
+      position: absolute;
+      left: 14px;
+      bottom: 12px;
+      font-size: 11px;
+      color: rgba(253,248,226,.9);
+      background: rgba(0,0,0,.35);
+      padding: 4px 8px;
+      border-radius: 999px;
+      backdrop-filter: blur(10px);
+      z-index: 1000;
+      pointer-events: none;
+    }
+
+    .map-category-badge {
+      position: absolute;
+      right: 14px;
+      top: 12px;
+      font-size: 11px;
+      color: #201b2a;
+      background: rgba(253,248,226,.95);
+      padding: 5px 10px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      box-shadow: 0 6px 18px rgba(0,0,0,.35);
+      z-index: 1000;
+      pointer-events: none;
+      font-family: "Gowun Dodum", sans-serif;
+    }
+
+    /* CATEGORY FILTERS */
+    .filters-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .tag {
+      font-size: 11px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.27);
+      color: #fdfdfd;
+      background: rgba(0,0,0,.18);
+      cursor: pointer;
+      backdrop-filter: blur(14px);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: background .2s, transform .15s, box-shadow .2s, border-color .2s;
+      font-family: "Gowun Dodum", sans-serif;
+    }
+
+    .tag:hover:not(.disabled):not(.active) {
+      transform: translateY(-1px);
+      background: rgba(0,0,0,.25);
+    }
+
+    .tag span.icon {
+      font-size: 12px;
+    }
+
+    .tag.active {
+      background: var(--leaf);
+      border-color: rgba(255,255,255,.75);
+      box-shadow: 0 0 14px rgba(163,181,101,.55);
+      transform: translateY(-1px);
+    }
+
+    .tag.disabled {
+      opacity: .4;
+      cursor: default;
+    }
+
+    /* PLACE LIST */
+    .place-list {
+      margin-top: 8px;
+      flex: 1;
+      min-height: 180px;
+      max-height: 280px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-right: 6px;
+    }
+
+    .place-list::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .place-list::-webkit-scrollbar-track {
+      background: rgba(0,0,0,.2);
+      border-radius: 3px;
+    }
+
+    .place-list::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,.3);
+      border-radius: 3px;
+    }
+
+    .place-card {
+      background: rgba(15,12,40,.75);
+      border-radius: 14px;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      border: 1px solid rgba(255,255,255,.08);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      transition: background .18s ease, transform .12s ease, box-shadow .18s ease, border-color .18s ease;
+    }
+
+    .place-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 26px rgba(0,0,0,.55);
+      border-color: rgba(252,221,157,.55);
+    }
+
+    .place-card.active {
+      background: linear-gradient(135deg, rgba(252,221,157,.55), rgba(241,100,46,.75));
+      border-color: rgba(255,255,255,.85);
+      box-shadow: 0 12px 30px rgba(241,100,46,.7);
+      color: #201b2a;
+    }
+
+    .place-main {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .place-name {
+      font-size: 13px;
+      font-weight: 600;
+      font-family: "Nanum Myeongjo", "Gowun Dodum", "Noto Sans KR", serif;
+    }
+
+    .place-type {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .11em;
+      opacity: .85;
+    }
+
+    .place-meta {
+      font-size: 11px;
+      opacity: .85;
+    }
+
+    /* RIGHT: MEMORY CARD */
+    .right-panel {
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--glass-border);
+      background: radial-gradient(circle at 0 0, rgba(252,221,157,.18), transparent 60%),
+                  radial-gradient(circle at 100% 100%, rgba(163,181,101,.15), transparent 60%),
+                  rgba(7,5,25,.78);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(28px) saturate(160%);
+      padding: 18px 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .memory-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .memory-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      margin: 0;
+      font-family: "Nanum Myeongjo", "Gowun Dodum", "Noto Sans KR", serif;
+    }
+
+    .memory-type-pill {
+      font-size: 11px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.25);
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-family: "Gowun Dodum", sans-serif;
+    }
+
+    .memory-sub {
+      font-size: 13px;
+      color: var(--sun);
+      margin: 2px 0 0;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 6px 10px;
+      margin-top: 6px;
+      font-size: 11.5px;
+      color: rgba(253,248,226,.9);
+    }
+
+    .meta-label {
+      opacity: .7;
+    }
+
+    .glass-grid {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 8px;
+    }
+
+    .glass-cell {
+      border-radius: 12px;
+      padding: 10px;
+      border: 1px solid rgba(255,255,255,.28);
+      background: linear-gradient(135deg, rgba(255,255,255,.18), rgba(255,255,255,.06));
+      color: #201c2a;
+      font-size: 11.5px;
+      box-shadow: 0 8px 22px rgba(0,0,0,.35);
+      min-height: 56px;
+    }
+
+    .glass-cell h4 {
+      margin: 0 0 4px;
+      font-size: 11px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: #504E76;
+      font-family: "Nanum Myeongjo", "Gowun Dodum", "Noto Sans KR", serif;
+    }
+
+    .glass-cell p {
+      margin: 0;
+      color: #2f293d;
+      font-family: "Gowun Dodum", sans-serif;
+    }
+
+    .memory-foot {
+      margin-top: auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: rgba(253,248,226,.75);
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill-small {
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.22);
+      padding: 3px 8px;
+      background: rgba(0,0,0,.28);
+    }
+
+    /* Memory card fade animation */
+    .memory-content {
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Custom marker styles */
+    .custom-marker {
+      background: transparent;
+      border: none;
+    }
+
+    /* Leaflet popup styling */
+    .leaflet-popup-content-wrapper {
+      background: rgba(7,5,25,.95);
+      color: var(--sand);
+      border-radius: 12px;
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,.2);
+    }
+
+    .leaflet-popup-content {
+      margin: 12px 14px;
+      font-family: "Gowun Dodum", sans-serif;
+      font-size: 12px;
+    }
+
+    .leaflet-popup-content b {
+      font-family: "Nanum Myeongjo", serif;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .leaflet-popup-tip {
+      background: rgba(7,5,25,.95);
+      border: 1px solid rgba(255,255,255,.2);
+    }
+
+    /* Mobile responsive */
+    @media (max-width: 640px) {
+      body {
+        padding: 10px;
+      }
+
+      .app {
+        padding: 14px 16px;
+      }
+
+      .title-block h1 {
+        font-size: 18px;
+      }
+
+      .content {
+        min-height: auto;
+      }
+
+      .map-shell {
+        min-height: 220px;
+      }
+
+      .place-list {
+        max-height: 200px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <div class="title-block">
+        <h1>Korea Visual Diary – 나의 한국 추억 지도</h1>
+        <p>Places · Years · Feelings — personal map-based memory project</p>
+      </div>
+      <div class="year-filters" id="yearFilters">
+        <!-- Generated by JS -->
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- LEFT COLUMN -->
+      <section class="left-panel">
+        <!-- Circular globe map -->
+        <div class="map-shell">
+          <div class="map-globe" id="map"></div>
+          <div class="map-category-badge" id="mapCategoryBadge">
+            <span class="icon">✨</span><span class="label">전체 보기</span>
+          </div>
+          <div class="map-caption">
+            대한민국 중심으로 보는 지도입니다. 마커를 클릭하면 오른쪽 기억 카드가 열립니다.
+          </div>
+        </div>
+
+        <!-- Category filters -->
+        <div class="filters-row" id="typeFilters"></div>
+
+        <!-- Place list -->
+        <div class="place-list" id="placeList"></div>
+      </section>
+
+      <!-- RIGHT COLUMN: MEMORY CARD -->
+      <section class="right-panel" id="memoryPanel">
+        <div class="memory-header">
+          <div>
+            <h2 class="memory-title" id="memTitle">장소를 선택해 주세요</h2>
+            <p class="memory-sub" id="memSub">왼쪽 지도나 리스트에서 하나의 핀을 클릭하면, 여기에 기억 카드가 열립니다.</p>
+          </div>
+          <div class="memory-type-pill" id="memType">
+            <span class="icon">✨</span><span>TYPE</span>
+          </div>
+        </div>
+
+        <div class="meta-grid memory-content">
+          <div>
+            <div class="meta-label">도시 / City</div>
+            <div id="memCity">–</div>
+          </div>
+          <div>
+            <div class="meta-label">연도 / Year</div>
+            <div id="memYear">–</div>
+          </div>
+          <div style="grid-column:1 / -1;">
+            <div class="meta-label">주소 / Address</div>
+            <div id="memAddress">–</div>
+          </div>
+        </div>
+
+        <div class="glass-grid memory-content">
+          <div class="glass-cell">
+            <h4>MEMO</h4>
+            <p id="memNote">나중에 각 장소에 대한 나의 인사이트 / 추억 한 줄을 여기에 적을 예정입니다.</p>
+          </div>
+          <div class="glass-cell">
+            <h4>FOOD / TIP</h4>
+            <p id="memTip">음식 추천, 가는 시간대, 함께 가고 싶은 사람 등을 적을 수 있는 공간입니다.</p>
+          </div>
+        </div>
+
+        <div class="memory-foot">
+          <span>← 왼쪽에서 다른 핀을 클릭하면 내용이 업데이트됩니다.</span>
+          <span class="pill-small" id="memBadge">0 / 0 places</span>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    /* ---------------------------
+       CATEGORY CONFIG (KOREAN)
+       --------------------------- */
+    const CATEGORY_CONFIG = {
+      all:     { key: 'all',     label: '전체',      icon: '✨' },
+      cafe:    { key: 'cafe',    label: '카페',      icon: '☕' },
+      food:    { key: 'food',    label: '음식',      icon: '🍜' },
+      nature:  { key: 'nature',  label: '자연',      icon: '🌿' },
+      exp:     { key: 'exp',     label: '체험',      icon: '🎢' },
+      culture: { key: 'culture', label: '전시/문화', icon: '🖼️' },
+      study:   { key: 'study',   label: '공부',      icon: '📚' },
+      daily:   { key: 'daily',   label: '도시/일상', icon: '🏙️' },
+      market:  { key: 'market',  label: '마트/시장', icon: '🛒' },
+      etc:     { key: 'etc',     label: '기타',      icon: '⭐' }
+    };
+
+    /* ---------------------------
+       PLACES DATA
+       --------------------------- */
+    const places = [
+      {id:1,  name:"Never Ending Pottery Studio", type:"art cafe",  city:"서울", address:"서울 양천구 가로공원로 136", year:2025},
+      {id:2,  name:"세븐스플로어 2호점",          type:"food",      city:"인천", address:"인천 부평구 부평대로 15 부평서파빌딩 7층", year:2025},
+      {id:3,  name:"파르투내 (Uzbek & Russian market)", type:"grocery store", city:"서울", address:"서울 중구 마른내로 154 1-2층", year:2025},
+      {id:4,  name:"미쁘동 (Japanese food)",     type:"food",      city:"서울", address:"서울 마포구 동교로38길 33-21 2층", year:2025},
+      {id:5,  name:"이드 (Eid)",                 type:"food",      city:"서울", address:"서울 용산구 우사단로10길 15 1층", year:2025},
+      {id:6,  name:"투썸플레이스 서울숲역점",     type:"cafe",      city:"서울", address:"서울 성동구 왕십리로 58 포휴 1-2층 101,201호", year:2025},
+      {id:7,  name:"도봉산",                     type:"nature",    city:"서울", address:"서울 도봉구 도봉동 산 31", year:2025},
+      {id:8,  name:"동림캠프",                   type:"adventure", city:"경기 가평", address:"경기 가평군 청평면 모꼬지로 22-9", year:2025},
+      {id:9,  name:"강남그랜드안과의원",         type:"hospital",  city:"서울", address:"서울 서초구 강남대로 363 강남타워 4-5층", year:2025},
+      {id:10, name:"연천역 (폐역)",              type:"adventure", city:"경기 연천", address:"경기 연천군 연천읍 연천로 275-1", year:2025},
+      {id:11, name:"감천문화마을",               type:"adventure", city:"부산", address:"부산 사하구 감천동 1-17", year:2025},
+      {id:12, name:"광안리해수욕장",             type:"beach",     city:"부산", address:"부산 수영구 광안해변로 219", year:2025},
+      {id:13, name:"해운대해수욕장",             type:"beach",     city:"부산", address:"부산 해운대구 우동", year:2025},
+      {id:14, name:"청사포어항동방파제등대",     type:"adventure", city:"부산", address:"부산 해운대구 중동 591-21", year:2025},
+      {id:15, name:"해운대블루라인파크 미포정거장", type:"adventure", city:"부산", address:"부산 해운대구 달맞이길62번길 13", year:2025},
+      {id:16, name:"해운대블루라인파크 스카이캡슐", type:"adventure", city:"부산", address:"부산 해운대구 청사포로 116", year:2025},
+      {id:17, name:"CGV 미아",                   type:"cinema",    city:"서울", address:"서울 강북구 도봉로 34 트레지오쇼핑몰 9층", year:2025},
+      {id:18, name:"곤지암리조트 스키장",        type:"adventure", city:"경기 광주", address:"경기 광주시 도척면 도척윗로 278", year:2025},
+      {id:19, name:"잠실종합운동장 잠실야구장",   type:"adventure", city:"서울", address:"서울 송파구 올림픽로 25", year:2025},
+      {id:20, name:"뮤지엄산",                   type:"art",       city:"강원 원주", address:"강원특별자치도 원주시 지정면 오크밸리2길 260", year:2025},
+      {id:21, name:"피노키오숲",                 type:"nature",    city:"강원 원주", address:"강원특별자치도 원주시 신림면 소야1길 72 1층", year:2025},
+      {id:22, name:"모나용평 스키장",            type:"adventure", city:"강원 원주", address:"강원특별자치도 평창군 대관령면 올림픽로 715", year:2025},
+      {id:23, name:"무섬마을",                   type:"nature",    city:"경북 영주", address:"경북 영주시 문수면 무섬로234번길 31-12", year:2025},
+      {id:24, name:"부석사",                     type:"nature",    city:"경북 영주", address:"경북 영주시 부석면 부석사로 345", year:2025},
+      {id:25, name:"용설2호지",                  type:"adventure", city:"경기 안성", address:"경기 안성시 죽산면 용설호수길 187", year:2025},
+      {id:26, name:"안성맞춤랜드",               type:"adventure", city:"경기 안성", address:"경기 안성시 보개면 남사당로 198", year:2025},
+      {id:27, name:"Study Center",              type:"study",     city:"서울", address:"서울 서대문구 연세로2다길 19", year:2025},
+      {id:28, name:"시립보라매인터넷중독예방상담센터", type:"study", city:"서울", address:"서울 동작구 여의대방로20길 61 시립보라매청소년센터 슬기동 2층 201호", year:2025},
+      {id:29, name:"의림지",                     type:"nature",    city:"충북 제천", address:"충북 제천시 모산동 241", year:2025},
+      {id:30, name:"오이도해변",                 type:"nature",    city:"경기 시흥", address:"경기 시흥시 정왕동 2202-4", year:2025},
+      {id:31, name:"맛자랑",                     type:"food",      city:"경기 시흥", address:"경기 시흥시 오이도로 253 1층", year:2025},
+      {id:32, name:"솔다박체험휴양마을",         type:"adventure", city:"전북 무주", address:"전북특별자치도 무주군 안성면 장무로 1637 1층", year:2025},
+      {id:33, name:"머루와인동굴",               type:"adventure", city:"전북 무주", address:"전북특별자치도 무주군 적상면 산성로 359", year:2025},
+      {id:34, name:"삼년산성 북문",              type:"nature",    city:"충북 보은", address:"충북 보은군 보은읍 어암리 산 1-1", year:2025},
+      {id:35, name:"보은사",                     type:"nature",    city:"충북 보은", address:"충북 보은군 보은읍 성주1길 104", year:2025},
+      {id:36, name:"속리산 자생식물원",          type:"nature",    city:"충북 보은", address:"충북 보은군 속리산면 속리산로 611", year:2025},
+      {id:37, name:"달이머무는집",               type:"nature",    city:"충북 영동", address:"충북 영동군 황간면 월류봉길 57", year:2025},
+      {id:38, name:"월류정",                     type:"nature",    city:"충북 영동", address:"충북 영동군 황간면 원촌리 산 20-1", year:2025},
+      {id:39, name:"시흥갯골생태공원",           type:"nature",    city:"경기 시흥", address:"경기 시흥시 동서로 287", year:2025},
+      {id:40, name:"안동하회마을",               type:"nature",    city:"경북 안동", address:"경북 안동시 풍천면 하회리 1176-1", year:2025},
+      {id:41, name:"탈놀이전수관",               type:"nature",    city:"경북 안동", address:"경북 안동시 풍천면 하회종가길 3-15", year:2025},
+      {id:42, name:"호계서원",                   type:"nature",    city:"경북 안동", address:"경북 안동시 도산면 퇴계로 2001-36", year:2025},
+      {id:43, name:"도산서원",                   type:"nature",    city:"경북 안동", address:"경북 안동시 도산면 도산서원길 154", year:2025},
+      {id:44, name:"안동회관",                   type:"food",      city:"경북 안동", address:"경북 안동시 태사길 71", year:2025},
+      {id:45, name:"월영보트",                   type:"nature",    city:"경북 안동", address:"경북 안동시 상아동 569", year:2025},
+      {id:46, name:"안동국제컨벤션센터 & 세계유교문화박물관", type:"adventure", city:"경북 안동", address:"경북 안동시 도산면 월천길 301", year:2025},
+      {id:47, name:"yaniyan art home",           type:"art",       city:"서울", address:"서울 강남구 압구정로14길 39", year:2025},
+      {id:48, name:"디뮤지엄",                   type:"art",       city:"서울", address:"서울 성동구 왕십리로 83-21 1-4층", year:2025},
+      {id:49, name:"두끼떡볶이 명동역점",        type:"food",      city:"서울", address:"서울 중구 명동10길 35-3 2층", year:2025},
+      {id:50, name:"FNC엔터테인먼트 청담",        type:"adventure", city:"서울", address:"서울 강남구 도산대로85길 46", year:2025},
+      {id:51, name:"마이아트뮤지엄 원그로브점",   type:"art",       city:"서울", address:"서울 강서구 공항대로 165 원그로브 C동 2층 W213호", year:2025},
+      {id:52, name:"솔내음산촌마을",             type:"nature",    city:"전북 무주", address:"전북특별자치도 무주군 안성면 칠연로 504", year:2025},
+      {id:53, name:"카페돌체",                   type:"cafe",      city:"서울", address:"서울 서초구 올림픽대로 2085-14 가빛섬 1층", year:2025},
+      {id:54, name:"다미",                       type:"food",      city:"서울", address:"서울 영등포구 국제금융로8길 34 오륜빌딩 1층", year:2025},
+      {id:55, name:"마라공방 회현점",             type:"food",      city:"서울", address:"서울 중구 남대문시장길 73 3층", year:2025}
+    ];
+
+    function mapTypeToCategoryKey(type) {
+      const t = String(type || '').toLowerCase();
+      if (t === 'cafe' || t === 'art cafe') return 'cafe';
+      if (t === 'food') return 'food';
+      if (t === 'nature' || t === 'beach') return 'nature';
+      if (t === 'adventure' || t === 'cinema') return 'exp';
+      if (t === 'art') return 'culture';
+      if (t === 'study') return 'study';
+      if (t === 'grocery store') return 'market';
+      if (t === 'hospital') return 'daily';
+      return 'etc';
+    }
+
+    places.forEach(p => {
+      p.category = mapTypeToCategoryKey(p.type);
+      p.coords = null;
+    });
+
+    const yearFiltersEl = document.getElementById('yearFilters');
+    const typeFiltersEl = document.getElementById('typeFilters');
+    const placeListEl = document.getElementById('placeList');
+    const mapCategoryBadge = document.getElementById('mapCategoryBadge');
+
+    const memTitle = document.getElementById('memTitle');
+    const memSub = document.getElementById('memSub');
+    const memType = document.getElementById('memType');
+    const memCity = document.getElementById('memCity');
+    const memYear = document.getElementById('memYear');
+    const memAddress = document.getElementById('memAddress');
+    const memNote = document.getElementById('memNote');
+    const memTip = document.getElementById('memTip');
+    const memBadge = document.getElementById('memBadge');
+
+    let currentYear = 2025;
+    let currentCategory = 'all';
+    let activeId = null;
+
+    /* ---------------------------
+       GEOCODING WITH CACHE
+       --------------------------- */
+    const GEOCODE_CACHE_KEY = 'korea_diary_geocode_cache';
+    const CACHE_EXPIRY_DAYS = 30;
+
+    function getGeocodeCache() {
+      try {
+        const cached = localStorage.getItem(GEOCODE_CACHE_KEY);
+        if (!cached) return {};
+        const data = JSON.parse(cached);
+        const now = Date.now();
+        const filtered = {};
+        for (const [key, value] of Object.entries(data)) {
+          if (now - value.timestamp < CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000) {
+            filtered[key] = value;
+          }
+        }
+        return filtered;
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function setGeocodeCache(address, coords) {
+      try {
+        const cache = getGeocodeCache();
+        cache[address] = { coords, timestamp: Date.now() };
+        localStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify(cache));
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    async function geocodePlace(place) {
+      if (place.coords) return place.coords;
+
+      const cache = getGeocodeCache();
+      const cached = cache[place.address];
+      if (cached) {
+        place.coords = cached.coords;
+        return place.coords;
+      }
+
+      const query = place.address || (place.city + ' ' + place.name);
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=kr&limit=1`;
+
+      try {
+        const res = await fetch(url, {
+          headers: {
+            "Accept": "application/json"
+          }
+        });
+        const data = await res.json();
+        if (data && data[0]) {
+          const lat = parseFloat(data[0].lat);
+          const lon = parseFloat(data[0].lon);
+          const coords = [lat, lon];
+          place.coords = coords;
+          setGeocodeCache(place.address, coords);
+          return coords;
+        }
+      } catch (e) {
+        console.warn('Geocoding error for', place.name, e);
+      }
+      return null;
+    }
+
+    /* ---------------------------
+       CUSTOM MARKER ICONS
+       --------------------------- */
+    function createMarkerIcon(category) {
+      const config = CATEGORY_CONFIG[category] || CATEGORY_CONFIG.etc;
+      const iconHtml = `
+        <div style="
+          width: 32px;
+          height: 32px;
+          background: rgba(252,221,157,0.95);
+          border: 2px solid rgba(241,100,46,0.8);
+          border-radius: 50% 50% 50% 0;
+          transform: rotate(-45deg);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        ">
+          <span style="
+            transform: rotate(45deg);
+            font-size: 16px;
+            display: block;
+          ">${config.icon}</span>
+        </div>
+      `;
+
+      return L.divIcon({
+        html: iconHtml,
+        className: 'custom-marker',
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+        popupAnchor: [0, -32]
+      });
+    }
+
+    /* ---------------------------
+       LEAFLET MAP INIT
+       --------------------------- */
+    let map;
+    let markersLayer;
+
+    function initMap() {
+      if (map) return;
+
+      const southWest = L.latLng(33.0, 124.0);
+      const northEast = L.latLng(38.8, 132.0);
+      const bounds = L.latLngBounds(southWest, northEast);
+
+      map = L.map('map', {
+        zoomControl: false,
+        attributionControl: false,
+        maxBounds: bounds,
+        maxBoundsViscosity: 1.0,
+        minZoom: 6,
+        maxZoom: 15
+      }).setView([36.3, 127.8], 7);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: ''
+      }).addTo(map);
+
+      markersLayer = L.layerGroup().addTo(map);
+
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 200);
+    }
+
+    function highlightPlaceCard(id) {
+      const cards = placeListEl.querySelectorAll('.place-card');
+      cards.forEach(card => {
+        if (Number(card.dataset.id) === id) {
+          card.classList.add('active');
+          card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        } else {
+          card.classList.remove('active');
+        }
+      });
+    }
+
+    async function updateMapMarkers(filteredPlaces) {
+      if (!map) return;
+      markersLayer.clearLayers();
+
+      if (filteredPlaces.length === 0) return;
+
+      const bounds = [];
+
+      for (const p of filteredPlaces) {
+        const coords = await geocodePlace(p);
+        if (!coords) continue;
+
+        const icon = createMarkerIcon(p.category);
+        const marker = L.marker(coords, { icon }).addTo(markersLayer);
+
+        marker.bindPopup(`
+          <b>${p.name}</b><br>
+          ${p.city}<br>
+          ${p.address}
+        `);
+
+        marker.on('click', () => {
+          activeId = p.id;
+          updateMemoryCard(p, filteredPlaces.length);
+          highlightPlaceCard(p.id);
+          map.setView(coords, Math.max(map.getZoom(), 11), {
+            animate: true,
+            duration: 0.5
+          });
+        });
+
+        bounds.push(coords);
+      }
+
+      if (bounds.length > 0) {
+        try {
+          map.fitBounds(bounds, { padding: [30, 30], maxZoom: 9 });
+        } catch (e) {
+          map.setView([36.3, 127.8], 7);
+        }
+      } else {
+        map.setView([36.3, 127.8], 7);
+      }
+    }
+
+    function getYearsWithCounts() {
+      const counts = {};
+      places.forEach(p => {
+        counts[p.year] = (counts[p.year] || 0) + 1;
+      });
+      return counts;
+    }
+
+    function buildYearFilters() {
+      const counts = getYearsWithCounts();
+      const years = [2022, 2023, 2024, 2025];
+      yearFiltersEl.innerHTML = '';
+
+      years.forEach(y => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'year-chip';
+        if (!counts[y]) btn.classList.add('disabled');
+        if (y === currentYear) btn.classList.add('active');
+        btn.dataset.year = y;
+        btn.innerHTML = `${y} <span class="count">(${counts[y] || 0})</span>`;
+        btn.addEventListener('click', () => {
+          if (!counts[y]) return;
+          currentYear = y;
+          activeId = null;
+          currentCategory = 'all';
+          buildYearFilters();
+          buildTypeFilters();
+          renderPlaces();
+          resetMemoryCard();
+          updateMapCategoryBadge();
+        });
+        yearFiltersEl.appendChild(btn);
+      });
+    }
+
+    function getCategoryCountsForYear(year) {
+      const counts = {};
+      places.forEach(p => {
+        if (p.year !== year) return;
+        const c = p.category || 'etc';
+        counts[c] = (counts[c] || 0) + 1;
+      });
+      return counts;
+    }
+
+    function buildTypeFilters() {
+      const counts = getCategoryCountsForYear(currentYear);
+      typeFiltersEl.innerHTML = '';
+
+      const allConfig = CATEGORY_CONFIG.all;
+      const allBtn = document.createElement('button');
+      allBtn.type = 'button';
+      allBtn.className = 'tag' + (currentCategory === 'all' ? ' active' : '');
+      allBtn.innerHTML = `<span class="icon">${allConfig.icon}</span><span>${allConfig.label}</span>`;
+      allBtn.addEventListener('click', () => {
+        currentCategory = 'all';
+        activeId = null;
+        buildTypeFilters();
+        renderPlaces();
+        resetMemoryCard();
+        updateMapCategoryBadge();
+      });
+      typeFiltersEl.appendChild(allBtn);
+
+      const keysInOrder = ['cafe', 'food', 'nature', 'exp', 'culture', 'study', 'daily', 'market', 'etc'];
+      keysInOrder.forEach(key => {
+        const cfg = CATEGORY_CONFIG[key];
+        const count = counts[key] || 0;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tag';
+        if (currentCategory === key) btn.classList.add('active');
+        if (!count) btn.classList.add('disabled');
+        btn.innerHTML = `<span class="icon">${cfg.icon}</span><span>${cfg.label}${count ? ` (${count})` : ''}</span>`;
+        btn.addEventListener('click', () => {
+          if (!count) return;
+          currentCategory = key;
+          activeId = null;
+          buildTypeFilters();
+          renderPlaces();
+          resetMemoryCard();
+          updateMapCategoryBadge();
+        });
+        typeFiltersEl.appendChild(btn);
+      });
+    }
+
+    async function renderPlaces() {
+      const filtered = places.filter(p => {
+        if (p.year !== currentYear) return false;
+        if (currentCategory !== 'all' && p.category !== currentCategory) return false;
+        return true;
+      });
+
+      placeListEl.innerHTML = '';
+
+      filtered.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'place-card' + (p.id === activeId ? ' active' : '');
+        card.dataset.id = p.id;
+
+        const catCfg = CATEGORY_CONFIG[p.category] || CATEGORY_CONFIG.etc;
+        card.innerHTML = `
+          <div class="place-main">
+            <div class="place-name">${p.name}</div>
+            <div class="place-type">${catCfg.icon} ${catCfg.label}</div>
+          </div>
+          <div class="place-meta">${p.city} · ${p.address}</div>
+        `;
+
+        card.addEventListener('click', () => {
+          activeId = p.id;
+          renderPlaces();
+          updateMemoryCard(p, filtered.length);
+          updateMapCategoryBadge(p.category);
+          if (map && p.coords) {
+            map.setView(p.coords, Math.max(map.getZoom(), 12), {
+              animate: true,
+              duration: 0.5
+            });
+          }
+        });
+
+        placeListEl.appendChild(card);
+      });
+
+      memBadge.textContent = `${filtered.length} / ${places.length} places`;
+
+      await updateMapMarkers(filtered);
+    }
+
+    function resetMemoryCard() {
+      memTitle.textContent = '장소를 선택해 주세요';
+      memSub.textContent = '왼쪽 지도나 리스트에서 하나의 핀을 클릭하면, 여기에 기억 카드가 열립니다.';
+      memType.innerHTML = `<span class="icon">✨</span><span>TYPE</span>`;
+      memCity.textContent = '–';
+      memYear.textContent = '–';
+      memAddress.textContent = '–';
+      memNote.textContent = '나중에 각 장소에 대한 나의 인사이트 / 추억 한 줄을 여기에 적을 예정입니다.';
+      memTip.textContent = '음식 추천, 가는 시간대, 함께 가고 싶은 사람 등을 적을 수 있는 공간입니다.';
+    }
+
+    function getCategoryConfig(catKey) {
+      return CATEGORY_CONFIG[catKey] || CATEGORY_CONFIG.etc;
+    }
+
+    function updateMemoryCard(place, countInList) {
+      const catCfg = getCategoryConfig(place.category);
+
+      const contentElements = document.querySelectorAll('.memory-content');
+      contentElements.forEach(el => {
+        el.style.animation = 'none';
+        setTimeout(() => {
+          el.style.animation = 'fadeIn 0.3s ease-in-out';
+        }, 10);
+      });
+
+      memTitle.textContent = place.name;
+      memSub.textContent = `${place.city} · ${place.address}`;
+      memType.innerHTML = `<span class="icon">${catCfg.icon}</span><span>${catCfg.label}</span>`;
+      memCity.textContent = place.city;
+      memYear.textContent = place.year;
+      memAddress.textContent = place.address;
+
+      if (place.note) {
+        memNote.textContent = place.note;
+      } else {
+        memNote.textContent = '여기에 이 장소에 대한 나의 기억/인사이트를 작성할 예정입니다.';
+      }
+
+      if (place.tip) {
+        memTip.textContent = place.tip;
+      } else {
+        if (place.category === 'food' || place.category === 'cafe') {
+          memTip.textContent = '이 장소에서 먹었던 음식, 추천 메뉴, 다시 가고 싶은 이유 등을 기록할 수 있습니다.';
+        } else if (place.category === 'nature') {
+          memTip.textContent = '날씨, 계절, 함께 갔던 사람, 풍경의 느낌 등을 기록할 수 있습니다.';
+        } else if (place.category === 'culture') {
+          memTip.textContent = '전시/공연에서 인상적이었던 장면, 작품에 대한 생각을 정리할 수 있습니다.';
+        } else if (place.category === 'exp') {
+          memTip.textContent = '체험 활동, 스키/놀이기구, 스페셜한 순간들을 간단히 정리해 보세요.';
+        } else if (place.category === 'study') {
+          memTip.textContent = '공부 분위기, 나의 컨디션, 이 공간에서 느낀 동기부여를 기록할 수 있습니다.';
+        } else if (place.category === 'market') {
+          memTip.textContent = '무엇을 샀는지, 가격 느낌, "한국에서 이런 것도 살 수 있구나" 같은 작은 발견을 적어도 좋아요.';
+        } else {
+          memTip.textContent = '이 장소에서 느낀 감정, 배운 점, 나만의 한 줄 메시지를 남길 수 있습니다.';
+        }
+      }
+
+      memBadge.textContent = `${countInList} / ${places.length} places`;
+    }
+
+    function updateMapCategoryBadge(catKey) {
+      let key = catKey || currentCategory;
+      if (!key || key === 'all') key = 'all';
+      const cfg = getCategoryConfig(key);
+      const label = cfg.label === '전체' ? '전체 보기' : cfg.label + ' 보기';
+      mapCategoryBadge.innerHTML = `<span class="icon">${cfg.icon}</span><span class="label">${label}</span>`;
+    }
+
+    initMap();
+    buildYearFilters();
+    buildTypeFilters();
+    renderPlaces();
+    resetMemoryCard();
+    updateMapCategoryBadge();
+  </script>
+</body>
+</html>
