@@ -196,7 +196,6 @@
       background: #1a1a2e;
     }
 
-    /* Soften Leaflet tiles */
     .map-globe .leaflet-tile-pane {
       filter: brightness(0.85) contrast(1.1) saturate(0.9);
     }
@@ -698,10 +697,9 @@
       {id:52, name:"솔내음산촌마을",             type:"nature",    city:"전북 무주", address:"전북특별자치도 무주군 안성면 칠연로 504", year:2025},
       {id:53, name:"카페돌체",                   type:"cafe",      city:"서울", address:"서울 서초구 올림픽대로 2085-14 가빛섬 1층", year:2025},
       {id:54, name:"다미",                       type:"food",      city:"서울", address:"서울 영등포구 국제금융로8길 34 오륜빌딩 1층", year:2025},
-      {id:55, name:"마라공방 회현점",             type:"food",      city:"서울", address:"서울 중구 남대문시장길 73 3층", year:2025},
+      {id:55, name:"마라공방 회현점",             type:"food",      city:"서울", address:"서울 중구 남대문시장길 73 3층", year:2025}
     ];
 
-    // Map type to category key
     function mapTypeToCategoryKey(type) {
       const t = String(type || '').toLowerCase();
       if (t === 'cafe' || t === 'art cafe') return 'cafe';
@@ -715,15 +713,11 @@
       return 'etc';
     }
 
-    // Add category and coords to each place
     places.forEach(p => {
       p.category = mapTypeToCategoryKey(p.type);
       p.coords = null;
     });
 
-    /* ---------------------------
-       DOM REFERENCES
-       --------------------------- */
     const yearFiltersEl = document.getElementById('yearFilters');
     const typeFiltersEl = document.getElementById('typeFilters');
     const placeListEl = document.getElementById('placeList');
@@ -773,15 +767,13 @@
         cache[address] = { coords, timestamp: Date.now() };
         localStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify(cache));
       } catch (e) {
-        // Ignore storage errors
+        // ignore
       }
     }
 
     async function geocodePlace(place) {
-      // Check if already geocoded
       if (place.coords) return place.coords;
 
-      // Check cache
       const cache = getGeocodeCache();
       const cached = cache[place.address];
       if (cached) {
@@ -789,15 +781,13 @@
         return place.coords;
       }
 
-      // Geocode via Nominatim
       const query = place.address || (place.city + ' ' + place.name);
       const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=kr&limit=1`;
 
       try {
         const res = await fetch(url, {
           headers: {
-            "Accept": "application/json",
-            "User-Agent": "KoreaVisualDiary/1.0"
+            "Accept": "application/json"
           }
         });
         const data = await res.json();
@@ -859,7 +849,6 @@
     function initMap() {
       if (map) return;
 
-      // South Korea bounds (roughly East Asia region)
       const southWest = L.latLng(33.0, 124.0);
       const northEast = L.latLng(38.8, 132.0);
       const bounds = L.latLngBounds(southWest, northEast);
@@ -868,29 +857,23 @@
         zoomControl: false,
         attributionControl: false,
         maxBounds: bounds,
-        maxBoundsViscosity: 1.0, // Prevent dragging outside bounds
+        maxBoundsViscosity: 1.0,
         minZoom: 6,
         maxZoom: 15
-      }).setView([36.3, 127.8], 7); // Center on South Korea
+      }).setView([36.3, 127.8], 7);
 
-      // Use a softer tile layer
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 18,
         attribution: ''
       }).addTo(map);
 
-      // Markers layer
       markersLayer = L.layerGroup().addTo(map);
 
-      // Fix map size after a short delay
       setTimeout(() => {
         map.invalidateSize();
       }, 200);
     }
 
-    /* ---------------------------
-       HIGHLIGHT PLACE CARD
-       --------------------------- */
     function highlightPlaceCard(id) {
       const cards = placeListEl.querySelectorAll('.place-card');
       cards.forEach(card => {
@@ -903,9 +886,6 @@
       });
     }
 
-    /* ---------------------------
-       UPDATE MAP MARKERS
-       --------------------------- */
     async function updateMapMarkers(filteredPlaces) {
       if (!map) return;
       markersLayer.clearLayers();
@@ -931,7 +911,6 @@
           activeId = p.id;
           updateMemoryCard(p, filteredPlaces.length);
           highlightPlaceCard(p.id);
-          // Center map on marker
           map.setView(coords, Math.max(map.getZoom(), 11), {
             animate: true,
             duration: 0.5
@@ -941,12 +920,10 @@
         bounds.push(coords);
       }
 
-      // Fit bounds if we have markers
       if (bounds.length > 0) {
         try {
           map.fitBounds(bounds, { padding: [30, 30], maxZoom: 9 });
         } catch (e) {
-          // Fallback if bounds calculation fails
           map.setView([36.3, 127.8], 7);
         }
       } else {
@@ -954,9 +931,6 @@
       }
     }
 
-    /* ---------------------------
-       YEAR FILTERS
-       --------------------------- */
     function getYearsWithCounts() {
       const counts = {};
       places.forEach(p => {
@@ -993,9 +967,6 @@
       });
     }
 
-    /* ---------------------------
-       CATEGORY FILTERS
-       --------------------------- */
     function getCategoryCountsForYear(year) {
       const counts = {};
       places.forEach(p => {
@@ -1010,7 +981,6 @@
       const counts = getCategoryCountsForYear(currentYear);
       typeFiltersEl.innerHTML = '';
 
-      // "All" button
       const allConfig = CATEGORY_CONFIG.all;
       const allBtn = document.createElement('button');
       allBtn.type = 'button';
@@ -1026,7 +996,6 @@
       });
       typeFiltersEl.appendChild(allBtn);
 
-      // Category buttons
       const keysInOrder = ['cafe', 'food', 'nature', 'exp', 'culture', 'study', 'daily', 'market', 'etc'];
       keysInOrder.forEach(key => {
         const cfg = CATEGORY_CONFIG[key];
@@ -1050,9 +1019,6 @@
       });
     }
 
-    /* ---------------------------
-       PLACES LIST
-       --------------------------- */
     async function renderPlaces() {
       const filtered = places.filter(p => {
         if (p.year !== currentYear) return false;
@@ -1094,13 +1060,9 @@
 
       memBadge.textContent = `${filtered.length} / ${places.length} places`;
 
-      // Update markers on map
       await updateMapMarkers(filtered);
     }
 
-    /* ---------------------------
-       MEMORY CARD
-       --------------------------- */
     function resetMemoryCard() {
       memTitle.textContent = '장소를 선택해 주세요';
       memSub.textContent = '왼쪽 지도나 리스트에서 하나의 핀을 클릭하면, 여기에 기억 카드가 열립니다.';
@@ -1119,7 +1081,6 @@
     function updateMemoryCard(place, countInList) {
       const catCfg = getCategoryConfig(place.category);
 
-      // Add fade animation
       const contentElements = document.querySelectorAll('.memory-content');
       contentElements.forEach(el => {
         el.style.animation = 'none';
@@ -1135,7 +1096,6 @@
       memYear.textContent = place.year;
       memAddress.textContent = place.address;
 
-      // Use custom note/tip if available, otherwise use default template
       if (place.note) {
         memNote.textContent = place.note;
       } else {
@@ -1145,7 +1105,6 @@
       if (place.tip) {
         memTip.textContent = place.tip;
       } else {
-        // Category-based default tips
         if (place.category === 'food' || place.category === 'cafe') {
           memTip.textContent = '이 장소에서 먹었던 음식, 추천 메뉴, 다시 가고 싶은 이유 등을 기록할 수 있습니다.';
         } else if (place.category === 'nature') {
@@ -1166,9 +1125,6 @@
       memBadge.textContent = `${countInList} / ${places.length} places`;
     }
 
-    /* ---------------------------
-       MAP CATEGORY BADGE
-       --------------------------- */
     function updateMapCategoryBadge(catKey) {
       let key = catKey || currentCategory;
       if (!key || key === 'all') key = 'all';
@@ -1177,9 +1133,6 @@
       mapCategoryBadge.innerHTML = `<span class="icon">${cfg.icon}</span><span class="label">${label}</span>`;
     }
 
-    /* ---------------------------
-       INITIALIZATION
-       --------------------------- */
     initMap();
     buildYearFilters();
     buildTypeFilters();
@@ -1189,3 +1142,4 @@
   </script>
 </body>
 </html>
+
